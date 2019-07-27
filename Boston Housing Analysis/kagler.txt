@@ -1,0 +1,162 @@
+/* Import Test data set */
+FILENAME REFFILE '/home/egiakoumakis0/sasuser.v94/Statistics/week13/test.csv';
+
+PROC IMPORT DATAFILE=REFFILE
+	DBMS=CSV
+	OUT=STAT_KAG.test;
+	GETNAMES=YES;
+RUN;
+
+proc print data=STAT_KAG.test;
+run;
+
+/* Add empty SalePrice column */
+data STAT_KAG.test;
+set STAT_KAG.test;
+SalePrice = .;
+;
+
+/* Import Train data set */
+FILENAME REFFILE '/home/egiakoumakis0/sasuser.v94/Statistics/week13/train.csv';
+
+PROC IMPORT DATAFILE=REFFILE
+	DBMS=CSV
+	OUT=STAT_KAG.train;
+	GETNAMES=YES;
+RUN;
+
+proc print data=STAT_KAG.train;
+run;
+
+/* Combine train and test data sets and clean up*/
+data final_train;
+set STAT_KAG.train STAT_KAG.test;
+if LotFrontage EQ 'NA' THEN LotFrontage = 0;
+if GarageYrBlt EQ 'NA' THEN GarageYrBlt = 0;
+run;
+
+proc print data=final_train;
+run;
+
+/* Stepwise selection using all variables */
+proc glmselect data = final_train;
+class MSZoning LotFrontage Street Alley LotShape LandContour Utilities LotConfig LandSlope Neighborhood Condition1 
+Condition2 HouseStyle RoofStyle RoofMatl Exterior1st Exterior2nd MasVnrType ExterCond Foundation 
+BsmtQual BsmtExposure BsmtFinType1 BsmtFinType2 Heating HeatingQC CentralAir Electrical KitchenQual Functional 
+FireplaceQu GarageType GarageFinish GarageQual GarageCond PavedDrive PoolQC Fence MiscFeature SaleType SaleCondition;
+model SalePrice = MSSubClass | MSZoning | LotFrontage | LotArea | Street | Alley | LotShape | LandContour | Utilities | LotConfig 
+| LandSlope | Neighborhood | Condition1 | Condition2 | HouseStyle | OverallQual | OverallCond | YearBuilt | YearRemodAdd 
+| RoofStyle | RoofMatl | Exterior1st | Exterior2nd | MasVnrType | MasVnrArea | ExterCond | Foundation | BsmtQual 
+| BsmtExposure | BsmtFinType1 | BsmtFinSF1 | BsmtFinType2 | BsmtFinSF2 | BsmtUnfSF | TotalBsmtSF | Heating | HeatingQC | CentralAir 
+| Electrical | "1stFlrSF"n | "2ndFlrSF"n | LowQualFinSF | GrLivArea | BsmtFullBath | BsmtHalfBath | HalfBath | BedroomAbvGr 
+| KitchenAbvGr | KitchenQual | TotRmsAbvGrd | Functional | Fireplaces | FireplaceQu | GarageType | GarageYrBlt | GarageFinish 
+| GarageCars | GarageArea | GarageQual | GarageCond | PavedDrive | WoodDeckSF | OpenPorchSF | EnclosedPorch | "3SsnPorch"n | ScreenPorch 
+| PoolArea | PoolQC | Fence | MiscFeature | MiscVal | MoSold | YrSold | SaleType | SaleCondition @2
+/ selection=stepwise(choose=PRESS) hierarchy=single showpvalues cvmethod=random(2);
+output out = results_step p = Predict;
+run;
+
+/* Make results Kaggle friendly and fix prediction issues */
+data step_results_final;
+set results_step;
+if Predict > 0 then SalePrice = Predict;
+if Predict < 0 then SalePrice = 160000; /* Mean = 180000 */
+keep Id SalePrice;
+where Id > 1460;
+;
+
+proc print data=step_results_final;
+run;
+
+/* Forward selection using all variables */
+proc glmselect data = final_train;
+class MSZoning LotFrontage Street Alley LotShape LandContour Utilities LotConfig LandSlope Neighborhood Condition1 
+Condition2 BldgType HouseStyle RoofStyle RoofMatl Exterior1st Exterior2nd MasVnrType ExterQual ExterCond Foundation 
+BsmtQual BsmtCond BsmtExposure BsmtFinType1 BsmtFinType2 Heating HeatingQC CentralAir Electrical KitchenQual Functional 
+FireplaceQu GarageType GarageFinish GarageQual GarageCond PavedDrive PoolQC Fence MiscFeature SaleType SaleCondition;
+model SalePrice = MSSubClass | MSZoning | LotFrontage | LotArea | Street | Alley | LotShape | LandContour | Utilities | LotConfig 
+| LandSlope | Neighborhood | Condition1 | Condition2 | BldgType | HouseStyle | OverallQual | OverallCond | YearBuilt | YearRemodAdd 
+| RoofStyle | RoofMatl | Exterior1st | Exterior2nd | MasVnrType | MasVnrArea | ExterQual | ExterCond | Foundation | BsmtQual | BsmtCond 
+| BsmtExposure | BsmtFinType1 | BsmtFinSF1 | BsmtFinType2 | BsmtFinSF2 | BsmtUnfSF | TotalBsmtSF | Heating | HeatingQC | CentralAir 
+| Electrical | "1stFlrSF"n | "2ndFlrSF"n | LowQualFinSF | GrLivArea | BsmtFullBath | BsmtHalfBath | FullBath | HalfBath | BedroomAbvGr 
+| KitchenAbvGr | KitchenQual | TotRmsAbvGrd | Functional | Fireplaces | FireplaceQu | GarageType | GarageYrBlt | GarageFinish 
+| GarageCars | GarageArea | GarageQual | GarageCond | PavedDrive | WoodDeckSF | OpenPorchSF | EnclosedPorch | "3SsnPorch"n | ScreenPorch 
+| PoolArea | PoolQC | Fence | MiscFeature | MiscVal | MoSold | YrSold | SaleType | SaleCondition @2
+/ selection=forward(choose=PRESS) hierarchy=single showpvalues cvmethod=random(2);
+output out = results_for p = Predict;
+run;
+
+/* Make results Kaggle friendly and fix prediction issues */
+data for_results_final;
+set results_for;
+if Predict > 0 then SalePrice = Predict;
+if Predict < 0 then SalePrice = 160000; /* Mean = 180000 */
+keep Id SalePrice;
+where Id > 1460;
+;
+
+proc print data=for_results_final;
+run;
+
+/* Backward selection using all variables */
+proc glmselect data = final_train;
+class MSZoning LotFrontage Street Alley LotShape LandContour Utilities LotConfig LandSlope Neighborhood Condition1 
+Condition2 BldgType HouseStyle RoofStyle RoofMatl Exterior1st Exterior2nd MasVnrType ExterQual ExterCond Foundation 
+BsmtQual BsmtCond BsmtExposure BsmtFinType1 BsmtFinType2 Heating HeatingQC CentralAir Electrical KitchenQual Functional 
+FireplaceQu GarageType GarageFinish GarageQual GarageCond PavedDrive PoolQC Fence MiscFeature SaleType SaleCondition;
+model SalePrice = MSSubClass MSZoning LotFrontage LotArea Street Alley LotShape LandContour Utilities LotConfig 
+LandSlope Neighborhood Condition1 Condition2 BldgType HouseStyle OverallQual OverallCond YearBuilt YearRemodAdd 
+RoofStyle RoofMatl Exterior1st Exterior2nd MasVnrType MasVnrArea ExterQual ExterCond Foundation BsmtQual BsmtCond 
+BsmtExposure BsmtFinType1 BsmtFinSF1 BsmtFinType2 BsmtFinSF2 BsmtUnfSF TotalBsmtSF Heating HeatingQC CentralAir 
+Electrical "1stFlrSF"n "2ndFlrSF"n LowQualFinSF GrLivArea BsmtFullBath BsmtHalfBath FullBath HalfBath BedroomAbvGr 
+KitchenAbvGr KitchenQual TotRmsAbvGrd Functional Fireplaces FireplaceQu GarageType GarageYrBlt GarageFinish 
+GarageCars GarageArea GarageQual GarageCond PavedDrive WoodDeckSF OpenPorchSF EnclosedPorch "3SsnPorch"n ScreenPorch 
+PoolArea PoolQC Fence MiscFeature MiscVal MoSold YrSold SaleType SaleCondition
+/ selection=backward(choose=PRESS) hierarchy=single showpvalues cvmethod=random(2);
+output out = results_back p = Predict;
+run;
+
+/* Make results Kaggle friendly and fix prediction issues */
+data back_results_final;
+set results_back;
+if Predict > 0 then SalePrice = Predict;
+if Predict < 0 then SalePrice = 160000; /* Mean = 180000 */
+keep Id SalePrice;
+where Id > 1460;
+;
+
+proc print data=back_results_final;
+run;
+
+/* Custom selection */
+proc glmselect data = final_train;
+class MSZoning LotFrontage Street Alley LotShape LandContour Utilities LotConfig LandSlope Neighborhood Condition1 
+Condition2 BldgType HouseStyle RoofStyle RoofMatl Exterior1st Exterior2nd MasVnrType ExterQual ExterCond Foundation 
+BsmtQual BsmtCond BsmtExposure BsmtFinType1 BsmtFinType2 Heating HeatingQC CentralAir Electrical KitchenQual Functional 
+FireplaceQu GarageType GarageFinish GarageQual GarageCond PavedDrive PoolQC Fence MiscFeature SaleType SaleCondition;
+model SalePrice = MSSubClass | MSZoning | LotFrontage | LotArea | Street | LotShape | LandContour | Utilities | LotConfig 
+| LandSlope | Neighborhood | Condition1 | Condition2 | BldgType | HouseStyle | OverallQual | OverallCond | YearBuilt | YearRemodAdd 
+| RoofStyle | RoofMatl | Exterior1st | Exterior2nd | MasVnrType | MasVnrArea | ExterQual | ExterCond | Foundation | BsmtQual | BsmtCond 
+| BsmtExposure | BsmtFinType1 | BsmtFinSF1 | BsmtFinType2 | BsmtFinSF2 | BsmtUnfSF | TotalBsmtSF | Heating | HeatingQC | CentralAir 
+| Electrical | "1stFlrSF"n | "2ndFlrSF"n | LowQualFinSF | GrLivArea | BsmtFullBath | BsmtHalfBath | FullBath | HalfBath | BedroomAbvGr 
+| KitchenAbvGr | KitchenQual | TotRmsAbvGrd | Functional | Fireplaces | FireplaceQu | GarageType | GarageFinish 
+| GarageCars | GarageArea | GarageQual | GarageCond | PavedDrive | WoodDeckSF | OpenPorchSF | EnclosedPorch | "3SsnPorch"n | ScreenPorch 
+| PoolArea | PoolQC | Fence | MiscVal | MoSold | YrSold | SaleType | SaleCondition @2
+/ selection=forward(choose=PRESS) showpvalues;
+output out = results_cus p = Predict;
+run;
+
+/* Make results Kaggle friendly and fix prediction issues */
+data cus_results_final;
+set results_cus;
+if Predict > 0 then SalePrice = Predict;
+if Predict < 0 then SalePrice = 160000; /* Mean = 180000 */
+keep Id SalePrice;
+where Id > 1460;
+;
+
+proc print data=cus_results_final;
+run;
+
+/* Go to library, export data in SAS student folder and then download to pc before uploading to kaggle */ 
+/* Current best kaggle attempt rank# 1086 score 0.15032 */

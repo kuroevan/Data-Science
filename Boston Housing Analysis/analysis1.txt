@@ -1,0 +1,81 @@
+/* Import Test Data*/;  
+FILENAME REFFILE '/home/davidtran0/Statistical Foundations/Week 13/test.csv';
+PROC IMPORT DATAFILE=REFFILE
+	DBMS=CSV
+	OUT=STAT1.TEST1;
+	GETNAMES=YES;
+RUN;
+
+PROC PRINT DATA=STAT1.TEST1; RUN;
+
+/* Import Train Data*/; 
+FILENAME REFFILE '/home/davidtran0/Statistical Foundations/Week 13/train.csv';
+PROC IMPORT DATAFILE=REFFILE
+	DBMS=CSV
+	OUT=STAT1.TRAIN1;
+	GETNAMES=YES;
+RUN;
+PROC Print DATA=STAT1.TRAIN1; RUN;
+
+/* Separating the Edward Neighborhood to its own Dataset*/; 
+DATA TRAIN2;
+	SET STAT1.TRAIN1;
+	IF Neighborhood EQ 'Edwards';
+run; 
+PROC PRINT Data=TRAIN2;
+run; 
+
+/* Separating the BrkSide Neighborhood to its own Dataset*/; 
+DATA TRAIN3;
+	SET STAT1.TRAIN1;
+	IF Neighborhood EQ 'BrkSide';
+run; 
+PROC PRINT Data=TRAIN3;
+run; 
+
+/* Separating the NAmes Neighborhood to its own Dataset*/; 
+DATA TRAIN4;
+	SET STAT1.TRAIN1;
+	IF Neighborhood EQ 'NAmes';
+run; 
+PROC PRINT Data=TRAIN4;
+run; 
+
+/* Combining the 3 Neighborhood Data*/; 
+Data FULL; 
+	SET TRAIN2 TRAIN3 TRAIN4;
+run;
+PROC PRINT Data=FULL;
+
+run;
+
+/* Log Transform Data */
+Data LogFull;
+	SET Full;
+	LogGrLIvArea = log(GrLIvArea);
+	LogSalePrice = log(SalePrice);
+run;
+PROC PRINT Data=LogFull;
+run;
+
+/* Plotting the Data */
+PROC SGPLOT Data = Full;
+STYLEATTRS DATASYMBOLS=(CIRCLE TRIANGLE
+Asterisk);
+SCATTER X=GrLIvArea Y=SalePrice / GROUP=Neighborhood;
+	 axis1 ORDER=(0 to 6000 by 100);
+run; 
+
+/* Plotting the transformed data */
+PROC SGPLOT Data = LogFull;
+STYLEATTRS DATASYMBOLS=(CIRCLE TRIANGLE
+Asterisk);
+SCATTER X=LogGrLIvArea Y=SalePrice / GROUP=Neighborhood;
+	 axis1 ORDER=(0 to 6000 by 100);
+run; 
+
+/* Building the model between SalePrice = logGrLIvArea & Neighborhood*/;
+PROC REG data=LogFull PLOTS(unpack) = diagnostics;
+	MODEL SalePrice = LogGrLIvArea 
+	/VIF CLM CLI;
+run;
